@@ -1,2 +1,3 @@
-# MDS-Project
-Second Year 2nd semester MDS Project
+# Welcome to your Lovable project
+
+TODO: Document your project here
