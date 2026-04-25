@@ -1,12 +1,14 @@
 import { Link, useLocation } from "react-router-dom";
-import { Upload, History, Swords, HelpCircle } from "lucide-react";
+import { Upload, History, Swords, HelpCircle, Layers, Users } from "lucide-react";
 import deerLogo from "@/assets/deer-logo.png";
 
 const navItems = [
   { to: "/vault", label: "Upload Vault", icon: Upload },
   { to: "/history", label: "Study History", icon: History },
+  { to: "/flashcards", label: "Flashcards", icon: Layers },
   { to: "/quests", label: "Quests", icon: Swords },
   { to: "/quizzes", label: "Quizzes", icon: HelpCircle },
+  { to: "/friends", label: "Friends", icon: Users },
 ];
 
 const Navbar = () => {

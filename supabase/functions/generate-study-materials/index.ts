@@ -14,7 +14,7 @@ serve(async (req) => {
     if (!authHeader) throw new Error("No authorization header");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!;
+    const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -58,7 +58,7 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `You are an expert study material generator. Based on the provided document content, generate comprehensive study materials. You must respond using the generate_study_materials tool.`,
+            content: `You are an expert study material generator. Based on the provided document content, generate comprehensive study materials including a summary, quiz questions, a quest learning path, and flashcards. You must respond using the generate_study_materials tool.`,
           },
           {
             role: "user",
@@ -108,8 +108,21 @@ serve(async (req) => {
                     },
                     description: "3-5 progressive learning quest levels",
                   },
+                  flashcards: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        front: { type: "string", description: "The prompt/question side (concise)" },
+                        back: { type: "string", description: "The answer/explanation side" },
+                      },
+                      required: ["front", "back"],
+                      additionalProperties: false,
+                    },
+                    description: "8-15 flashcards covering key terms and concepts",
+                  },
                 },
-                required: ["summary", "quizQuestions", "questPath"],
+                required: ["summary", "quizQuestions", "questPath", "flashcards"],
                 additionalProperties: false,
               },
             },
@@ -142,11 +155,28 @@ serve(async (req) => {
 
     const materials = JSON.parse(toolCall.function.arguments);
 
-    // Save study session
+    // 1. Create the canonical "class" row (single source of truth)
+    const { data: cls, error: classError } = await supabase
+      .from("classes")
+      .insert({
+        user_id: user.id,
+        title: `Study: ${docNames}`,
+        summary: materials.summary,
+        source_document_ids: documentIds,
+      })
+      .select()
+      .single();
+    if (classError) throw classError;
+
+    // 2. Link the source documents to this class
+    await supabase.from("documents").update({ class_id: cls.id }).in("id", documentIds);
+
+    // 3. Save study session linked to class
     const { data: session, error: sessionError } = await supabase
       .from("study_sessions")
       .insert({
         user_id: user.id,
+        class_id: cls.id,
         title: `Study: ${docNames}`,
         type: "summary",
         summary: materials.summary,
@@ -156,17 +186,18 @@ serve(async (req) => {
       .single();
     if (sessionError) throw sessionError;
 
-    // Save quiz
+    // 4. Save quiz
     const { error: quizError } = await supabase.from("quizzes").insert({
       user_id: user.id,
       session_id: session.id,
+      class_id: cls.id,
       title: `Quiz: ${docNames}`,
       questions: materials.quizQuestions,
       total: materials.quizQuestions.length,
     });
     if (quizError) console.error("Quiz insert error:", quizError);
 
-    // Save quests
+    // 5. Save quests
     const questInserts = materials.questPath.map((q: any, i: number) => ({
       user_id: user.id,
       session_id: session.id,
@@ -180,11 +211,26 @@ serve(async (req) => {
     const { error: questError } = await supabase.from("quests").insert(questInserts);
     if (questError) console.error("Quest insert error:", questError);
 
+    // 6. Save flashcards
+    const flashInserts = (materials.flashcards || []).map((f: any, i: number) => ({
+      user_id: user.id,
+      class_id: cls.id,
+      front: f.front,
+      back: f.back,
+      position: i,
+    }));
+    if (flashInserts.length) {
+      const { error: flashError } = await supabase.from("flashcards").insert(flashInserts);
+      if (flashError) console.error("Flashcard insert error:", flashError);
+    }
+
     return new Response(JSON.stringify({
+      classId: cls.id,
       sessionId: session.id,
       summary: materials.summary,
       quizCount: materials.quizQuestions.length,
       questCount: materials.questPath.length,
+      flashcardCount: flashInserts.length,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

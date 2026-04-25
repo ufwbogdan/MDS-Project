@@ -13,6 +13,9 @@ import UploadVault from "./pages/UploadVault";
 import StudyHistory from "./pages/StudyHistory";
 import Quests from "./pages/Quests";
 import Quizzes from "./pages/Quizzes";
+import Flashcards from "./pages/Flashcards";
+import Friends from "./pages/Friends";
+import SharedClass from "./pages/SharedClass";
 import CoffeeBreak from "./pages/CoffeeBreak";
 import NotFound from "./pages/NotFound";
 
@@ -34,6 +37,9 @@ const App = () => (
             <Route path="/history" element={<ProtectedRoute><StudyHistory /></ProtectedRoute>} />
             <Route path="/quests" element={<ProtectedRoute><Quests /></ProtectedRoute>} />
             <Route path="/quizzes" element={<ProtectedRoute><Quizzes /></ProtectedRoute>} />
+            <Route path="/flashcards" element={<ProtectedRoute><Flashcards /></ProtectedRoute>} />
+            <Route path="/friends" element={<ProtectedRoute><Friends /></ProtectedRoute>} />
+            <Route path="/share/:token" element={<SharedClass />} />
             <Route path="/offline" element={<CoffeeBreak />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

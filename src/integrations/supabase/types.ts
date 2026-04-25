@@ -14,8 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      classes: {
+        Row: {
+          audio_status: string
+          audio_url: string | null
+          created_at: string
+          id: string
+          is_public: boolean
+          share_token: string
+          source_document_ids: string[]
+          summary: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          audio_status?: string
+          audio_url?: string | null
+          created_at?: string
+          id?: string
+          is_public?: boolean
+          share_token?: string
+          source_document_ids?: string[]
+          summary?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          audio_status?: string
+          audio_url?: string | null
+          created_at?: string
+          id?: string
+          is_public?: boolean
+          share_token?: string
+          source_document_ids?: string[]
+          summary?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       documents: {
         Row: {
+          class_id: string | null
           created_at: string
           extracted_text: string | null
           gdoc_url: string | null
@@ -27,6 +70,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          class_id?: string | null
           created_at?: string
           extracted_text?: string | null
           gdoc_url?: string | null
@@ -38,6 +82,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          class_id?: string | null
           created_at?: string
           extracted_text?: string | null
           gdoc_url?: string | null
@@ -48,23 +93,114 @@ export type Database = {
           type?: string
           user_id?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "documents_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flashcards: {
+        Row: {
+          back: string
+          class_id: string
+          created_at: string
+          due_at: string
+          ease: number
+          front: string
+          id: string
+          interval_days: number
+          last_reviewed_at: string | null
+          position: number
+          user_id: string
+        }
+        Insert: {
+          back: string
+          class_id: string
+          created_at?: string
+          due_at?: string
+          ease?: number
+          front: string
+          id?: string
+          interval_days?: number
+          last_reviewed_at?: string | null
+          position?: number
+          user_id: string
+        }
+        Update: {
+          back?: string
+          class_id?: string
+          created_at?: string
+          due_at?: string
+          ease?: number
+          front?: string
+          id?: string
+          interval_days?: number
+          last_reviewed_at?: string | null
+          position?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flashcards_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      friendships: {
+        Row: {
+          addressee_id: string
+          created_at: string
+          id: string
+          requester_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          addressee_id: string
+          created_at?: string
+          id?: string
+          requester_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          addressee_id?: string
+          created_at?: string
+          id?: string
+          requester_id?: string
+          status?: string
+          updated_at?: string
+        }
         Relationships: []
       }
       profiles: {
         Row: {
           created_at: string
+          email: string | null
           full_name: string | null
           id: string
+          username: string | null
         }
         Insert: {
           created_at?: string
+          email?: string | null
           full_name?: string | null
           id: string
+          username?: string | null
         }
         Update: {
           created_at?: string
+          email?: string | null
           full_name?: string | null
           id?: string
+          username?: string | null
         }
         Relationships: []
       }
@@ -72,11 +208,16 @@ export type Database = {
         Row: {
           content: string | null
           created_at: string
+          current_count: number
           description: string | null
+          expires_at: string | null
           id: string
           level: number
+          quest_action: string
+          quest_period: string
           session_id: string | null
           status: string
+          target_count: number
           title: string
           user_id: string
           xp: number
@@ -84,11 +225,16 @@ export type Database = {
         Insert: {
           content?: string | null
           created_at?: string
+          current_count?: number
           description?: string | null
+          expires_at?: string | null
           id?: string
           level: number
+          quest_action?: string
+          quest_period?: string
           session_id?: string | null
           status?: string
+          target_count?: number
           title: string
           user_id: string
           xp?: number
@@ -96,11 +242,16 @@ export type Database = {
         Update: {
           content?: string | null
           created_at?: string
+          current_count?: number
           description?: string | null
+          expires_at?: string | null
           id?: string
           level?: number
+          quest_action?: string
+          quest_period?: string
           session_id?: string | null
           status?: string
+          target_count?: number
           title?: string
           user_id?: string
           xp?: number
@@ -117,6 +268,7 @@ export type Database = {
       }
       quizzes: {
         Row: {
+          class_id: string | null
           completed_at: string | null
           created_at: string
           id: string
@@ -128,6 +280,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          class_id?: string | null
           completed_at?: string | null
           created_at?: string
           id?: string
@@ -139,6 +292,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          class_id?: string | null
           completed_at?: string | null
           created_at?: string
           id?: string
@@ -151,6 +305,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "quizzes_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "quizzes_session_id_fkey"
             columns: ["session_id"]
             isOneToOne: false
@@ -161,6 +322,7 @@ export type Database = {
       }
       study_sessions: {
         Row: {
+          class_id: string | null
           created_at: string
           document_ids: string[]
           id: string
@@ -170,6 +332,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          class_id?: string | null
           created_at?: string
           document_ids?: string[]
           id?: string
@@ -179,12 +342,96 @@ export type Database = {
           user_id: string
         }
         Update: {
+          class_id?: string | null
           created_at?: string
           document_ids?: string[]
           id?: string
           summary?: string | null
           title?: string
           type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_sessions_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_activity: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_inventory: {
+        Row: {
+          created_at: string
+          id: string
+          item_type: string
+          quantity: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_type: string
+          quantity?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_type?: string
+          quantity?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_streaks: {
+        Row: {
+          current_streak: number
+          id: string
+          last_active_date: string | null
+          longest_streak: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          current_streak?: number
+          id?: string
+          last_active_date?: string | null
+          longest_streak?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          current_streak?: number
+          id?: string
+          last_active_date?: string | null
+          longest_streak?: number
+          updated_at?: string
           user_id?: string
         }
         Relationships: []

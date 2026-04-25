@@ -9,6 +9,7 @@ const Signup = () => {
   const navigate = useNavigate();
   const { signUp } = useAuth();
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -16,8 +17,12 @@ const Signup = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+      toast({ title: "Invalid username", description: "3–20 characters, letters/numbers/underscore.", variant: "destructive" });
+      return;
+    }
     setLoading(true);
-    const { error } = await signUp(email, password, name);
+    const { error } = await signUp(email, password, name, username);
     setLoading(false);
     if (error) {
       toast({ title: "Sign up failed", description: error, variant: "destructive" });
@@ -48,6 +53,19 @@ const Signup = () => {
               placeholder="Buck Doe"
               required
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">Username</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
+              placeholder="buckdoe"
+              required
+            />
+            <p className="text-xs text-muted-foreground mt-1">Friends will use this to find you.</p>
           </div>
 
           <div>

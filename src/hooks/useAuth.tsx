@@ -1,13 +1,12 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, fullName: string, username?: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
@@ -35,13 +34,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string) => {
-    const { error } = await supabase.auth.signUp({
+  const signUp = async (email: string, password: string, fullName: string, username?: string) => {
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { full_name: fullName }, emailRedirectTo: window.location.origin },
     });
-    return { error: error?.message ?? null };
+    if (error) return { error: error.message };
+
+    // Best-effort write of username + email to profile (the trigger created the row)
+    if (data.user && username) {
+      await supabase
+        .from("profiles")
+        .update({ username: username.trim().toLowerCase(), email } as any)
+        .eq("id", data.user.id);
+    }
+    return { error: null };
   };
 
   const signIn = async (email: string, password: string) => {

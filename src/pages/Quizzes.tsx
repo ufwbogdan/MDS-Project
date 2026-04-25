@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import ScrollReveal from "@/components/ScrollReveal";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useActivity } from "@/hooks/useActivity";
 
 interface Question {
   question: string;
@@ -13,6 +14,7 @@ interface Question {
 
 const Quizzes = () => {
   const { user } = useAuth();
+  const { logActivity } = useActivity();
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [activeQuiz, setActiveQuiz] = useState<any | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -63,6 +65,7 @@ const Quizzes = () => {
       // Save score
       const score = answers.filter((a, i) => a === questions[i]?.correctIndex).length;
       supabase.from("quizzes").update({ score, completed_at: new Date().toISOString() }).eq("id", activeQuiz.id).then(() => {});
+      logActivity("complete_quiz", { quiz_id: activeQuiz.id, score });
     }
   };
 
@@ -122,23 +125,61 @@ const Quizzes = () => {
   const score = answers.filter((a, i) => a === questions[i]?.correctIndex).length;
 
   if (showResults) {
+    const xpEarned = score * 10;
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
         <main className="pt-24 pb-16 px-4">
           <div className="container mx-auto max-w-lg">
             <ScrollReveal>
-              <div className="coffee-card p-10 text-center">
+              <div className="coffee-card p-10 text-center mb-6">
                 <div className="text-5xl font-bold text-primary mb-2 tabular-nums">{score}/{questions.length}</div>
                 <p className="text-muted-foreground mb-1">
                   {score === questions.length ? "Perfect score! 🎉" : score >= questions.length / 2 ? "Great work! ☕" : "Keep studying! 💪"}
                 </p>
+                <div className="inline-flex items-center gap-1 mt-3 px-3 py-1 rounded-full bg-accent/10 text-accent text-sm font-medium">
+                  +{xpEarned} XP earned
+                </div>
                 <div className="flex gap-2 justify-center mt-6">
                   <button onClick={handleRestart} className="coffee-btn-outline flex items-center gap-2">
                     <RotateCcw className="w-4 h-4" /> Try Again
                   </button>
                   <button onClick={() => setActiveQuiz(null)} className="coffee-btn">Back to Quizzes</button>
                 </div>
+              </div>
+            </ScrollReveal>
+
+            <ScrollReveal delay={80}>
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                Review your answers
+              </h2>
+              <div className="space-y-3">
+                {questions.map((q, i) => {
+                  const userAns = answers[i];
+                  const correct = userAns === q.correctIndex;
+                  return (
+                    <div key={i} className="coffee-card p-4">
+                      <div className="flex items-start gap-2 mb-2">
+                        {correct ? (
+                          <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        ) : (
+                          <XCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                        )}
+                        <p className="text-sm font-medium text-foreground">{q.question}</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground ml-7">
+                        Your answer: <span className={correct ? "text-green-700" : "text-destructive"}>
+                          {userAns !== null ? q.options[userAns] : "—"}
+                        </span>
+                      </p>
+                      {!correct && (
+                        <p className="text-xs text-muted-foreground ml-7">
+                          Correct: <span className="text-green-700">{q.options[q.correctIndex]}</span>
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </ScrollReveal>
           </div>

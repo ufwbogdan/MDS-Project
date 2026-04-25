@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 import { Upload, History, Swords, HelpCircle, BookOpen, Flame, LogOut } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import ScrollReveal from "@/components/ScrollReveal";
+import StreakBar from "@/components/StreakBar";
+import { useStreak } from "@/hooks/useStreak";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -17,6 +19,12 @@ const quickActions = [
 const Dashboard = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { recordDailyActivity } = useStreak();
+
+  // Record daily activity on dashboard visit
+  useEffect(() => {
+    if (user) recordDailyActivity();
+  }, [user, recordDailyActivity]);
   const [stats, setStats] = useState({ docs: 0, sessions: 0, quests: 0, quizAvg: "—" });
 
   useEffect(() => {
@@ -84,6 +92,12 @@ const Dashboard = () => {
                   <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
                 </div>
               ))}
+            </div>
+          </ScrollReveal>
+
+          <ScrollReveal delay={120}>
+            <div className="mb-10">
+              <StreakBar />
             </div>
           </ScrollReveal>
 

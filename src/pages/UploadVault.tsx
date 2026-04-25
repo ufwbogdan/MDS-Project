@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import ScrollReveal from "@/components/ScrollReveal";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useActivity } from "@/hooks/useActivity";
 import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 
@@ -18,6 +19,7 @@ interface Document {
 
 const UploadVault = () => {
   const { user } = useAuth();
+  const { logActivity } = useActivity();
   const navigate = useNavigate();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [dragActive, setDragActive] = useState(false);
@@ -111,6 +113,7 @@ const UploadVault = () => {
     setUploading(false);
     loadDocuments();
     toast({ title: "Upload complete", description: "Files have been added to your vault" });
+    logActivity("upload_doc");
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -156,8 +159,9 @@ const UploadVault = () => {
       if (data?.error) throw new Error(data.error);
       toast({
         title: "Study materials generated! 🎉",
-        description: `Created summary, ${data.quizCount} quiz questions, and ${data.questCount} quest levels.`,
+        description: `Summary, ${data.quizCount} quiz Qs, ${data.questCount} quest levels, ${data.flashcardCount ?? 0} flashcards.`,
       });
+      logActivity("generate_materials", { documentIds: selectedIds, classId: data.classId });
       navigate("/history");
     } catch (err: any) {
       toast({ title: "Generation failed", description: err.message, variant: "destructive" });

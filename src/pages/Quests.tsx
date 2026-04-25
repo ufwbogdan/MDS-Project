@@ -1,51 +1,182 @@
-import { useState, useEffect } from "react";
-import { Lock, CheckCircle2, PlayCircle, Star, Loader2, FileText } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { CheckCircle2, Clock, Star, Loader2, Flame, CalendarDays } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import ScrollReveal from "@/components/ScrollReveal";
+import StreakBar from "@/components/StreakBar";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { toast } from "@/hooks/use-toast";
+import { useStreak } from "@/hooks/useStreak";
 
-const statusConfig = {
-  completed: { icon: CheckCircle2, ring: "ring-2 ring-accent/30 border-accent/20", iconColor: "text-accent", badge: "bg-accent/10 text-accent" },
-  current: { icon: PlayCircle, ring: "ring-2 ring-primary/40 border-primary/20 shadow-md", iconColor: "text-primary", badge: "bg-primary/10 text-primary" },
-  locked: { icon: Lock, ring: "opacity-50", iconColor: "text-muted-foreground", badge: "bg-muted text-muted-foreground" },
+const DAILY_QUEST_TEMPLATES = [
+  { title: "Quiz Whiz", description: "Complete 2 quizzes", quest_action: "complete_quiz", target_count: 2, xp: 100 },
+  { title: "Listener", description: "Listen to 3 summaries", quest_action: "listen_summary", target_count: 3, xp: 75 },
+  { title: "Upload Hero", description: "Upload 1 document", quest_action: "upload_doc", target_count: 1, xp: 50 },
+  { title: "Study Session", description: "Generate study materials", quest_action: "generate_materials", target_count: 1, xp: 80 },
+];
+
+const WEEKLY_QUEST_TEMPLATES = [
+  { title: "Quiz Master", description: "Complete 10 quizzes", quest_action: "complete_quiz", target_count: 10, xp: 500 },
+  { title: "Binge Listener", description: "Listen to 15 summaries", quest_action: "listen_summary", target_count: 15, xp: 400 },
+  { title: "Vault Filler", description: "Upload 5 documents", quest_action: "upload_doc", target_count: 5, xp: 300 },
+  { title: "Material Generator", description: "Generate 5 study sessions", quest_action: "generate_materials", target_count: 5, xp: 450 },
+  { title: "Streak Keeper", description: "Maintain a 5-day streak", quest_action: "maintain_streak", target_count: 5, xp: 600 },
+];
+
+const getStartOfDay = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+const getEndOfDay = () => {
+  const d = new Date();
+  d.setHours(23, 59, 59, 999);
+  return d;
+};
+
+const getStartOfWeek = () => {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+const getEndOfWeek = () => {
+  const start = getStartOfWeek();
+  start.setDate(start.getDate() + 6);
+  start.setHours(23, 59, 59, 999);
+  return start;
 };
 
 const Quests = () => {
   const { user } = useAuth();
+  const { streak } = useStreak();
   const [quests, setQuests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const generateQuests = useCallback(async (period: "daily" | "weekly") => {
     if (!user) return;
-    const load = async () => {
-      const { data } = await supabase
-        .from("quests")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("level", { ascending: true });
-      setQuests(data || []);
-      setLoading(false);
-    };
-    load();
+    const templates = period === "daily" ? DAILY_QUEST_TEMPLATES : WEEKLY_QUEST_TEMPLATES;
+    const expiresAt = period === "daily" ? getEndOfDay() : getEndOfWeek();
+
+    // Pick 3 random quests for daily, 3 for weekly
+    const shuffled = [...templates].sort(() => Math.random() - 0.5).slice(0, 3);
+
+    const inserts = shuffled.map((t, i) => ({
+      user_id: user.id,
+      title: t.title,
+      description: t.description,
+      quest_period: period,
+      quest_action: t.quest_action,
+      target_count: t.target_count,
+      current_count: 0,
+      xp: t.xp,
+      status: "current",
+      level: i + 1,
+      expires_at: expiresAt.toISOString(),
+    }));
+
+    await supabase.from("quests").insert(inserts as any);
   }, [user]);
 
-  const completeQuest = async (quest: any) => {
-    // Mark current as completed
-    await supabase.from("quests").update({ status: "completed" }).eq("id", quest.id);
-    // Unlock next quest in same session
-    const nextQuest = quests.find((q) => q.session_id === quest.session_id && q.level === quest.level + 1);
-    if (nextQuest) {
-      await supabase.from("quests").update({ status: "current" }).eq("id", nextQuest.id);
-    }
-    toast({ title: `+${quest.xp} XP! 🎉`, description: `Completed: ${quest.title}` });
-    // Reload
-    const { data } = await supabase.from("quests").select("*").eq("user_id", user!.id).order("level", { ascending: true });
-    setQuests(data || []);
-  };
+  const loadAndGenerate = useCallback(async () => {
+    if (!user) return;
+    const startOfDay = getStartOfDay().toISOString();
+    const startOfWeek = getStartOfWeek().toISOString();
 
-  const totalXp = quests.filter((q) => q.status === "completed").reduce((sum, q) => sum + q.xp, 0);
+    // Check existing daily quests for today
+    const { data: dailyQuests } = await supabase
+      .from("quests")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("quest_period", "daily")
+      .gte("expires_at", startOfDay);
+
+    if (!dailyQuests || dailyQuests.length === 0) {
+      await generateQuests("daily");
+    }
+
+    // Check existing weekly quests
+    const { data: weeklyQuests } = await supabase
+      .from("quests")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("quest_period", "weekly")
+      .gte("expires_at", startOfWeek);
+
+    if (!weeklyQuests || weeklyQuests.length === 0) {
+      await generateQuests("weekly");
+    }
+
+    // Now load all active quests and update progress
+    await updateQuestProgress();
+    await loadQuests();
+  }, [user, generateQuests]);
+
+  const updateQuestProgress = useCallback(async () => {
+    if (!user) return;
+    const startOfDay = getStartOfDay().toISOString();
+    const startOfWeek = getStartOfWeek().toISOString();
+
+    // Get all active quests
+    const { data: activeQuests } = await supabase
+      .from("quests")
+      .select("*")
+      .eq("user_id", user.id)
+      .neq("status", "completed")
+      .gte("expires_at", new Date().toISOString());
+
+    if (!activeQuests) return;
+
+    for (const quest of activeQuests) {
+      const q = quest as any;
+      const since = q.quest_period === "daily" ? startOfDay : startOfWeek;
+      let count = 0;
+
+      if (q.quest_action === "maintain_streak") {
+        count = streak.current_streak;
+      } else {
+        const { count: activityCount } = await supabase
+          .from("user_activity")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("action", q.quest_action)
+          .gte("created_at", since);
+        count = activityCount || 0;
+      }
+
+      const newStatus = count >= q.target_count ? "completed" : "current";
+      if (count !== q.current_count || newStatus !== q.status) {
+        await supabase.from("quests").update({
+          current_count: count,
+          status: newStatus,
+        } as any).eq("id", q.id);
+      }
+    }
+  }, [user, streak]);
+
+  const loadQuests = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("quests")
+      .select("*")
+      .eq("user_id", user.id)
+      .gte("expires_at", getStartOfWeek().toISOString())
+      .order("quest_period", { ascending: true })
+      .order("level", { ascending: true });
+    setQuests(data || []);
+    setLoading(false);
+  }, [user]);
+
+  useEffect(() => {
+    loadAndGenerate();
+  }, [loadAndGenerate]);
+
+  const dailyQuests = quests.filter((q: any) => q.quest_period === "daily");
+  const weeklyQuests = quests.filter((q: any) => q.quest_period === "weekly");
+  const totalXp = quests.filter((q: any) => q.status === "completed").reduce((sum: number, q: any) => sum + (q.xp || 0), 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -53,10 +184,10 @@ const Quests = () => {
       <main className="pt-24 pb-16 px-4">
         <div className="container mx-auto max-w-2xl">
           <ScrollReveal>
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-6">
               <div>
                 <h1 className="text-3xl font-bold text-foreground" style={{ lineHeight: "1.15" }}>Quests</h1>
-                <p className="text-muted-foreground mt-1">Your progressive learning path</p>
+                <p className="text-muted-foreground mt-1">Complete daily & weekly challenges</p>
               </div>
               <div className="coffee-card px-4 py-2 flex items-center gap-2">
                 <Star className="w-4 h-4 text-accent" />
@@ -65,61 +196,92 @@ const Quests = () => {
             </div>
           </ScrollReveal>
 
+          <ScrollReveal delay={60}>
+            <div className="mb-8">
+              <StreakBar />
+            </div>
+          </ScrollReveal>
+
           {loading ? (
             <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
-          ) : quests.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
-              <p className="font-medium">No quests yet</p>
-              <p className="text-sm mt-1">Generate study materials from your documents first</p>
-            </div>
           ) : (
-            <div className="relative">
-              <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-border" />
-              <div className="space-y-4">
-                {quests.map((quest, i) => {
-                  const config = statusConfig[quest.status as keyof typeof statusConfig] || statusConfig.locked;
-                  const Icon = config.icon;
-                  return (
-                    <ScrollReveal key={quest.id} delay={80 * (i + 1)}>
-                      <div className={`coffee-card p-5 ml-14 relative ${config.ring} transition-all duration-200`}>
-                        <div className="absolute -left-[3.75rem] top-5 w-8 h-8 rounded-full bg-background border-2 border-border flex items-center justify-center">
-                          <span className="text-xs font-bold text-muted-foreground">{quest.level}</span>
-                        </div>
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-semibold text-foreground">{quest.title}</h3>
-                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${config.badge}`}>
-                                {quest.status === "completed" ? "Done" : quest.status === "current" ? "In Progress" : "Locked"}
-                              </span>
-                            </div>
-                            <p className="text-sm text-muted-foreground">{quest.description}</p>
-                            {quest.content && quest.status === "current" && (
-                              <p className="text-sm text-foreground mt-2 whitespace-pre-line">{quest.content}</p>
-                            )}
-                            <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-                              <Star className="w-3 h-3" /> {quest.xp} XP
-                            </p>
-                          </div>
-                          <Icon className={`w-6 h-6 flex-shrink-0 ${config.iconColor}`} />
-                        </div>
-                        {quest.status === "current" && (
-                          <button onClick={() => completeQuest(quest)} className="coffee-btn text-sm mt-4 w-full">
-                            Complete Quest
-                          </button>
-                        )}
-                      </div>
-                    </ScrollReveal>
-                  );
-                })}
-              </div>
-            </div>
+            <>
+              <QuestSection
+                title="Daily Quests"
+                icon={<Flame className="w-5 h-5 text-accent" />}
+                quests={dailyQuests}
+                emptyText="No daily quests — check back tomorrow!"
+              />
+              <QuestSection
+                title="Weekly Quests"
+                icon={<CalendarDays className="w-5 h-5 text-primary" />}
+                quests={weeklyQuests}
+                emptyText="No weekly quests — check back next week!"
+              />
+            </>
           )}
         </div>
       </main>
     </div>
   );
 };
+
+const QuestSection = ({ title, icon, quests, emptyText }: { title: string; icon: React.ReactNode; quests: any[]; emptyText: string }) => (
+  <ScrollReveal delay={100}>
+    <div className="mb-8">
+      <div className="flex items-center gap-2 mb-4">
+        {icon}
+        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+      </div>
+      {quests.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-4">{emptyText}</p>
+      ) : (
+        <div className="space-y-3">
+          {quests.map((quest: any) => {
+            const isCompleted = quest.status === "completed";
+            const progress = Math.min((quest.current_count / quest.target_count) * 100, 100);
+            return (
+              <div
+                key={quest.id}
+                className={`coffee-card p-5 transition-all duration-200 ${
+                  isCompleted ? "ring-2 ring-accent/30 border-accent/20" : ""
+                }`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className="font-semibold text-foreground">{quest.title}</h3>
+                      {isCompleted && <CheckCircle2 className="w-4 h-4 text-accent" />}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{quest.description}</p>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs font-medium text-accent">
+                    <Star className="w-3 h-3" />
+                    {quest.xp} XP
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>{quest.current_count}/{quest.target_count}</span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {isCompleted ? "Done!" : quest.quest_period === "daily" ? "Today" : "This week"}
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${isCompleted ? "bg-accent" : "bg-primary"}`}
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  </ScrollReveal>
+);
 
 export default Quests;
