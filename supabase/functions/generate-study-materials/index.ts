@@ -3,23 +3,28 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.99.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
 
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("No authorization header");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!;
+    const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
     if (userError || !user) throw new Error("Unauthorized");
 
     const { documentIds } = await req.json();
@@ -38,7 +43,9 @@ serve(async (req) => {
       .join("\n\n---\n\n");
 
     if (!combinedText.trim() || combinedText.length < 20) {
-      throw new Error("Not enough text content in selected documents. Please upload documents with text content.");
+      throw new Error(
+        "Not enough text content in selected documents. Please upload documents with text content.",
+      );
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -47,91 +54,119 @@ serve(async (req) => {
     const docNames = docs.map((d: any) => d.name).join(", ");
 
     // Generate all materials in one call
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert study material generator. Based on the provided document content, generate comprehensive study materials. You must respond using the generate_study_materials tool.`,
-          },
-          {
-            role: "user",
-            content: `Generate study materials from these documents:\n\n${combinedText.substring(0, 15000)}`,
-          },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "generate_study_materials",
-              description: "Generate structured study materials from document content",
-              parameters: {
-                type: "object",
-                properties: {
-                  summary: {
-                    type: "string",
-                    description: "A comprehensive bullet-point summary of the key concepts. Use markdown bullet points.",
-                  },
-                  quizQuestions: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        question: { type: "string" },
-                        options: { type: "array", items: { type: "string" } },
-                        correctIndex: { type: "integer" },
-                      },
-                      required: ["question", "options", "correctIndex"],
-                      additionalProperties: false,
+    const aiResponse = await fetch(
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3-flash-preview",
+          messages: [
+            {
+              role: "system",
+              content: `You are an expert study material generator. Based on the provided document content, generate comprehensive study materials. You must respond using the generate_study_materials tool.`,
+            },
+            {
+              role: "user",
+              content: `Generate study materials from these documents:\n\n${combinedText.substring(0, 15000)}`,
+            },
+          ],
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "generate_study_materials",
+                description:
+                  "Generate structured study materials from document content",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    summary: {
+                      type: "string",
+                      description:
+                        "A comprehensive bullet-point summary of the key concepts. Use markdown bullet points.",
                     },
-                    description: "5-8 multiple choice quiz questions with 4 options each",
-                  },
-                  questPath: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        level: { type: "integer" },
-                        title: { type: "string" },
-                        description: { type: "string" },
-                        content: { type: "string", description: "Study content for this quest level" },
-                        xp: { type: "integer" },
+                    quizQuestions: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          question: { type: "string" },
+                          options: { type: "array", items: { type: "string" } },
+                          correctIndex: { type: "integer" },
+                        },
+                        required: ["question", "options", "correctIndex"],
+                        additionalProperties: false,
                       },
-                      required: ["level", "title", "description", "content", "xp"],
-                      additionalProperties: false,
+                      description:
+                        "5-8 multiple choice quiz questions with 4 options each",
                     },
-                    description: "3-5 progressive learning quest levels",
+                    questPath: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          level: { type: "integer" },
+                          title: { type: "string" },
+                          description: { type: "string" },
+                          content: {
+                            type: "string",
+                            description: "Study content for this quest level",
+                          },
+                          xp: { type: "integer" },
+                        },
+                        required: [
+                          "level",
+                          "title",
+                          "description",
+                          "content",
+                          "xp",
+                        ],
+                        additionalProperties: false,
+                      },
+                      description: "3-5 progressive learning quest levels",
+                    },
                   },
+                  required: ["summary", "quizQuestions", "questPath"],
+                  additionalProperties: false,
                 },
-                required: ["summary", "quizQuestions", "questPath"],
-                additionalProperties: false,
               },
             },
+          ],
+          tool_choice: {
+            type: "function",
+            function: { name: "generate_study_materials" },
           },
-        ],
-        tool_choice: { type: "function", function: { name: "generate_study_materials" } },
-      }),
-    });
+        }),
+      },
+    );
 
     if (!aiResponse.ok) {
       const status = aiResponse.status;
       const errText = await aiResponse.text();
       console.error("AI error:", status, errText);
       if (status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited. Please try again in a moment." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({
+            error: "Rate limited. Please try again in a moment.",
+          }),
+          {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
       if (status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add funds." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ error: "AI credits exhausted. Please add funds." }),
+          {
+            status: 402,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
       throw new Error(`AI request failed: ${status}`);
     }
@@ -177,21 +212,32 @@ serve(async (req) => {
       xp: q.xp,
       status: i === 0 ? "current" : "locked",
     }));
-    const { error: questError } = await supabase.from("quests").insert(questInserts);
+    const { error: questError } = await supabase
+      .from("quests")
+      .insert(questInserts);
     if (questError) console.error("Quest insert error:", questError);
 
-    return new Response(JSON.stringify({
-      sessionId: session.id,
-      summary: materials.summary,
-      quizCount: materials.quizQuestions.length,
-      questCount: materials.questPath.length,
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        sessionId: session.id,
+        summary: materials.summary,
+        quizCount: materials.quizQuestions.length,
+        questCount: materials.questPath.length,
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (e) {
     console.error("Error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        error: e instanceof Error ? e.message : "Unknown error",
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });
